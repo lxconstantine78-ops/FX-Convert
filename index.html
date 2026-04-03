@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0A0F1E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FX Convert">
+<meta name="description" content="Real-time currency converter with live exchange rates">
+<link rel="manifest" href="manifest.json">
+<title>FX Convert</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0A0F1E;
+    --surface:   #111827;
+    --card:      #161D2F;
+    --border:    rgba(255,255,255,0.07);
+    --accent:    #F0C040;
+    --accent2:   #3B82F6;
+    --accent3:   #10B981;
+    --text:      #F0F4FF;
+    --muted:     #6B7A99;
+    --danger:    #EF4444;
+    --radius:    20px;
+    --safe-top:  env(safe-area-inset-top, 0px);
+    --safe-bot:  env(safe-area-inset-bottom, 0px);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+    overflow: hidden;
+  }
+
+  /* ── APP SHELL ── */
+  #app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bot);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* background orbs */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb-1 { width: 320px; height: 320px; background: rgba(59,130,246,0.18); top: -80px; right: -80px; }
+  .orb-2 { width: 280px; height: 280px; background: rgba(240,192,64,0.10); bottom: 80px; left: -60px; }
+  .orb-3 { width: 200px; height: 200px; background: rgba(16,185,129,0.10); top: 40%; right: -40px; }
+
+  /* ── HEADER ── */
+  header {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 8px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 16px;
+    color: #000;
+    letter-spacing: -1px;
+  }
+  .logo-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 18px;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .logo-name span { color: var(--accent); }
+
+  .header-rate {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.5;
+  }
+  .header-rate .live-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--accent3);
+    border-radius: 50%;
+    margin-right: 4px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:.4; transform:scale(0.7); }
+  }
+
+  /* ── SCROLL AREA ── */
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 16px 24px;
+    position: relative; z-index: 5;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* ── RATE TICKER ── */
+  .ticker-wrap {
+    overflow: hidden;
+    margin-bottom: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .ticker-track {
+    display: flex; gap: 28px;
+    animation: ticker 22s linear infinite;
+    width: max-content;
+  }
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .ticker-item {
+    display: flex; gap: 6px; align-items: center;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    white-space: nowrap;
+  }
+  .ticker-item .pair { color: var(--muted); }
+  .ticker-item .val  { color: var(--text); font-weight: 500; }
+  .ticker-item .up   { color: var(--accent3); font-size: 9px; }
+  .ticker-item .dn   { color: var(--danger); font-size: 9px; }
+
+  /* ── CONVERTER CARD ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* ── AMOUNT INPUT SECTION ── */
+  .amount-section { margin-bottom: 0; }
+
+  .amount-label {
+    font-size: 11px; font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .amount-row {
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .currency-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 90px;
+    flex-shrink: 0;
+  }
+  .currency-badge:active { transform: scale(0.96); background: #1a2235; }
+  .currency-badge .flag { font-size: 20px; line-height: 1; }
+  .currency-badge .code {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 14px;
+    color: var(--text);
+  }
+  .currency-badge .chevron {
+    font-size: 10px; color: var(--muted);
+    margin-left: auto;
+  }
+
+  .amount-input-wrap {
+    flex: 1;
+    position: relative;
+  }
+  .amount-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 22px; font-weight: 500;
+    color: var(--text);
+    outline: none;
+    -webkit-appearance: none;
+    transition: border-color 0.2s;
+    text-align: right;
+  }
+  .amount-input:focus { border-color: var(--accent2); }
+  .amount-input::placeholder { color: var(--muted); }
+
+  /* ── SWAP BUTTON ── */
+  .swap-row {
+    display: flex; align-items: center; justify-content: center;
+    margin: 12px 0;
+    position: relative;
+  }
+  .swap-line {
+    position: absolute; left: 0; right: 0; top: 50%;
+    height: 1px; background: var(--border);
+  }
+  .swap-btn {
+    position: relative; z-index: 2;
+    width: 40px; height: 40px;
+    background: var(--accent);
+    border: none; border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    transition: all 0.3s cubic-bezier(.34,1.56,.64,1);
+    box-shadow: 0 4px 20px rgba(240,192,64,0.3);
+  }
+  .swap-btn:active { transform: rotate(180deg) scale(0.9); }
+  .swap-btn.spinning { animation: spinOnce 0.4s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes spinOnce {
+    from { transform: rotate(0deg) scale(1.1); }
+    to   { transform: rotate(180deg) scale(1); }
+  }
+
+  /* ── RESULT ── */
+  .result-section { }
+
+  .result-display {
+    background: linear-gradient(135deg, #0f1e3a 0%, #0d1a30 100%);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 14px;
+    padding: 16px 16px 14px;
+    margin-top: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .result-display::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.5), transparent);
+  }
+
+  .result-amount {
+    font-family: 'DM Mono', monospace;
+    font-size: 32px; font-weight: 500;
+    color: var(--text);
+    letter-spacing: -1px;
+    line-height: 1;
+    word-break: break-all;
+  }
+  .result-amount .result-currency {
+    font-size: 16px; color: var(--accent2);
+    margin-left: 6px;
+    font-weight: 400;
+  }
+  .result-rate-line {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* ── CONVERT BUTTON ── */
+  .convert-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none; border-radius: 14px;
+    padding: 16px;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px; font-weight: 700;
+    color: #000;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+    margin-top: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .convert-btn::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background 0.2s;
+  }
+  .convert-btn:active::after { background: rgba(255,255,255,0.15); }
+  .convert-btn:active { transform: scale(0.98); }
+  .convert-btn.loading {
+    pointer-events: none;
+    background: #7a6020;
+  }
+
+  /* ── QUICK AMOUNTS ── */
+  .quick-label {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 8px; font-weight: 500;
+  }
+  .quick-amounts {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .quick-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px; color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .quick-chip:active,
+  .quick-chip.active {
+    background: rgba(240,192,64,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── RATES GRID ── */
+  .rates-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px; font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .rates-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .rate-tile {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .rate-tile:active {
+    transform: scale(0.97);
+    border-color: rgba(240,192,64,0.3);
+  }
+  .rate-tile-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .rate-tile-flag { font-size: 22px; }
+  .rate-tile-change {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .rate-tile-change.up { background: rgba(16,185,129,0.15); color: var(--accent3); }
+  .rate-tile-change.dn { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .rate-tile-code {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 15px;
+    color: var(--text);
+  }
+  .rate-tile-name {
+    font-size: 11px; color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .rate-tile-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 16px; font-weight: 500;
+    color: var(--text);
+  }
+
+  /* ── MODAL ── */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    display: none; align-items: flex-end;
+    animation: fadeIn 0.2s;
+  }
+  .modal-backdrop.open { display: flex; }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+  .modal {
+    width: 100%;
+    background: var(--surface);
+    border-radius: 24px 24px 0 0;
+    padding: 20px 16px calc(20px + var(--safe-bot));
+    max-height: 75dvh;
+    display: flex; flex-direction: column;
+    animation: slideUp 0.3s cubic-bezier(.22,1,.36,1);
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 18px;
+    margin-bottom: 14px; text-align: center;
+  }
+  .modal-search {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; color: var(--text);
+    outline: none; width: 100%;
+    margin-bottom: 12px;
+    -webkit-appearance: none;
+  }
+  .modal-search::placeholder { color: var(--muted); }
+  .modal-search:focus { border-color: var(--accent2); }
+
+  .currency-list {
+    overflow-y: auto; flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .currency-list::-webkit-scrollbar { display: none; }
+  .currency-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 10px;
+  }
+  .currency-item:active { background: rgba(255,255,255,0.04); }
+  .currency-item.selected { background: rgba(240,192,64,0.08); }
+  .currency-item .ci-flag { font-size: 26px; flex-shrink: 0; }
+  .currency-item .ci-info { flex: 1; }
+  .currency-item .ci-code {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 15px; color: var(--text);
+  }
+  .currency-item .ci-name {
+    font-size: 12px; color: var(--muted);
+  }
+  .currency-item .ci-rate {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px; color: var(--muted);
+    text-align: right;
+  }
+  .currency-item.selected .ci-code { color: var(--accent); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: calc(90px + var(--safe-bot));
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 13px; color: var(--text);
+    z-index: 200;
+    opacity: 0;
+    transition: all 0.3s;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .toast.show {
+    opacity: 1; transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: relative; z-index: 10;
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 0 calc(10px + var(--safe-bot));
+  }
+  .nav-item {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 6px;
+    cursor: pointer;
+    transition: color 0.2s;
+    color: var(--muted);
+    font-size: 10px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border: none; background: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nav-item svg { width: 22px; height: 22px; }
+  .nav-item.active { color: var(--accent); }
+  .nav-item.active svg path,
+  .nav-item.active svg rect,
+  .nav-item.active svg circle { stroke: var(--accent); }
+
+  /* ── PAGES ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── ERROR STATE ── */
+  .error-banner {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px; color: var(--danger);
+    margin-bottom: 12px;
+    display: none;
+  }
+  .error-banner.show { display: block; }
+
+  /* ── HISTORY PAGE ── */
+  .history-empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted); font-size: 14px;
+  }
+  .history-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  .history-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .history-flags { font-size: 20px; }
+  .history-info { flex: 1; }
+  .history-from {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px; color: var(--muted);
+  }
+  .history-to {
+    font-family: 'DM Mono', monospace;
+    font-size: 16px; color: var(--text); font-weight: 500;
+  }
+  .history-time {
+    font-size: 11px; color: var(--muted);
+    text-align: right;
+  }
+
+  /* ── SETTINGS PAGE ── */
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .setting-label { font-size: 15px; color: var(--text); }
+  .setting-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .toggle {
+    width: 44px; height: 24px;
+    background: var(--surface);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent3); border-color: var(--accent3); }
+  .toggle::after {
+    content: '';
+    position: absolute; top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    background: white; border-radius: 50%;
+    transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Background Orbs -->
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">FX</div>
+      <div class="logo-name">FX<span>Convert</span></div>
+    </div>
+    <div class="header-rate">
+      <span class="live-dot"></span><span id="header-status">Loading rates…</span><br>
+      <span id="header-time" style="font-size:9px"></span>
+    </div>
+  </header>
+
+  <!-- Scrollable Content -->
+  <div class="scroll" id="main-scroll">
+
+    <!-- CONVERTER PAGE -->
+    <div class="page active" id="page-convert">
+
+      <!-- Ticker -->
+      <div class="ticker-wrap">
+        <div class="ticker-track" id="ticker-track">
+          <span class="ticker-item"><span class="pair">EUR/USD</span><span class="val">—</span></span>
+          <span class="ticker-item"><span class="pair">GBP/USD</span><span class="val">—</span></span>
+          <span class="ticker-item"><span class="pair">JPY/USD</span><span class="val">—</span></span>
+          <span class="ticker-item"><span class="pair">CAD/USD</span><span class="val">—</span></span>
+          <span class="ticker-item"><span class="pair">AUD/USD</span><span class="val">—</span></span>
+          <span class="ticker-item"><span class="pair">CHF/USD</span><span class="val">—</span></span>
+        </div>
+      </div>
+
+      <!-- Error Banner -->
+      <div class="error-banner" id="error-banner">
+        ⚠ Could not load live rates. Showing cached or offline data.
+      </div>
+
+      <!-- Converter Card -->
+      <div class="card">
+        <!-- FROM -->
+        <div class="amount-label">You send</div>
+        <div class="amount-row">
+          <div class="currency-badge" id="badge-from" onclick="openModal('from')">
+            <span class="flag" id="flag-from">🇺🇸</span>
+            <span class="code" id="code-from">USD</span>
+            <span class="chevron">▾</span>
+          </div>
+          <div class="amount-input-wrap">
+            <input class="amount-input" id="amount-input"
+              type="number" inputmode="decimal"
+              placeholder="0.00" value="100" min="0">
+          </div>
+        </div>
+
+        <!-- Swap -->
+        <div class="swap-row">
+          <div class="swap-line"></div>
+          <button class="swap-btn" id="swap-btn" onclick="swapCurrencies()">⇅</button>
+        </div>
+
+        <!-- TO -->
+        <div class="amount-label">You receive</div>
+        <div class="amount-row">
+          <div class="currency-badge" id="badge-to" onclick="openModal('to')">
+            <span class="flag" id="flag-to">🇪🇺</span>
+            <span class="code" id="code-to">EUR</span>
+            <span class="chevron">▾</span>
+          </div>
+          <div class="amount-input-wrap">
+            <div class="result-display">
+              <div class="result-amount" id="result-amount">
+                <span id="result-value">—</span>
+                <span class="result-currency" id="result-currency">EUR</span>
+              </div>
+              <div class="result-rate-line" id="rate-line">1 USD = — EUR</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Convert Button -->
+        <button class="convert-btn" id="convert-btn" onclick="doConvert()">
+          Convert Now
+        </button>
+      </div>
+
+      <!-- Quick Amounts -->
+      <div class="card">
+        <div class="quick-label">Quick amounts</div>
+        <div class="quick-amounts" id="quick-amounts">
+          <div class="quick-chip" onclick="setAmount(50)">50</div>
+          <div class="quick-chip active" onclick="setAmount(100)">100</div>
+          <div class="quick-chip" onclick="setAmount(250)">250</div>
+          <div class="quick-chip" onclick="setAmount(500)">500</div>
+          <div class="quick-chip" onclick="setAmount(1000)">1K</div>
+          <div class="quick-chip" onclick="setAmount(5000)">5K</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RATES PAGE -->
+    <div class="page" id="page-rates">
+      <div class="card" style="margin-bottom:14px">
+        <div class="rates-title">Live Rates <span style="color:var(--muted);font-size:12px;font-weight:400">vs USD</span></div>
+        <div class="rates-grid" id="rates-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div class="page" id="page-history">
+      <div class="card">
+        <div class="rates-title">Recent Conversions</div>
+        <div id="history-container">
+          <div class="history-empty">
+            <div class="empty-icon">📊</div>
+            No conversions yet.<br>Make your first conversion!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div class="page" id="page-settings">
+      <div class="card">
+        <div class="rates-title">Settings</div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Auto-convert</div>
+            <div class="setting-sub">Convert as you type</div>
+          </div>
+          <div class="toggle on" id="toggle-auto" onclick="toggleSetting('auto')"></div>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Haptic feedback</div>
+            <div class="setting-sub">Vibrate on convert</div>
+          </div>
+          <div class="toggle on" id="toggle-haptic" onclick="toggleSetting('haptic')"></div>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Base currency</div>
+            <div class="setting-sub">API base: USD</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--muted)">USD</div>
+        </div>
+        <div class="setting-row" style="border:none">
+          <div>
+            <div class="setting-label">Data source</div>
+            <div class="setting-sub">exchangerate-api.com</div>
+          </div>
+          <div style="font-size:11px;color:var(--accent3)">● Live</div>
+        </div>
+      </div>
+      <div class="card" style="text-align:center;color:var(--muted);font-size:12px">
+        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">FXConvert v1.0</div>
+        Real-time exchange rates powered by ExchangeRate-API.<br>
+        Built with C# / WinForms logic, delivered as a PWA.
+      </div>
+    </div>
+
+  </div><!-- /scroll -->
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" id="nav-convert" onclick="showPage('convert')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>
+      Convert
+    </button>
+    <button class="nav-item" id="nav-rates" onclick="showPage('rates')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Rates
+    </button>
+    <button class="nav-item" id="nav-history" onclick="showPage('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      History
+    </button>
+    <button class="nav-item" id="nav-settings" onclick="showPage('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      Settings
+    </button>
+  </nav>
+</div>
+
+<!-- Currency Picker Modal -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title">Select Currency</div>
+    <input class="modal-search" id="modal-search" type="search" placeholder="Search currency…"
+      oninput="filterCurrencies(this.value)">
+    <div class="currency-list" id="currency-list"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const CURRENCIES = [
+  {code:'USD',name:'US Dollar',flag:'🇺🇸'},
+  {code:'EUR',name:'Euro',flag:'🇪🇺'},
+  {code:'GBP',name:'British Pound',flag:'🇬🇧'},
+  {code:'JPY',name:'Japanese Yen',flag:'🇯🇵'},
+  {code:'CAD',name:'Canadian Dollar',flag:'🇨🇦'},
+  {code:'AUD',name:'Australian Dollar',flag:'🇦🇺'},
+  {code:'CHF',name:'Swiss Franc',flag:'🇨🇭'},
+  {code:'CNY',name:'Chinese Yuan',flag:'🇨🇳'},
+  {code:'INR',name:'Indian Rupee',flag:'🇮🇳'},
+  {code:'MXN',name:'Mexican Peso',flag:'🇲🇽'},
+  {code:'BRL',name:'Brazilian Real',flag:'🇧🇷'},
+  {code:'KRW',name:'South Korean Won',flag:'🇰🇷'},
+  {code:'SGD',name:'Singapore Dollar',flag:'🇸🇬'},
+  {code:'HKD',name:'Hong Kong Dollar',flag:'🇭🇰'},
+  {code:'NOK',name:'Norwegian Krone',flag:'🇳🇴'},
+  {code:'SEK',name:'Swedish Krona',flag:'🇸🇪'},
+  {code:'DKK',name:'Danish Krone',flag:'🇩🇰'},
+  {code:'NZD',name:'New Zealand Dollar',flag:'🇳🇿'},
+  {code:'ZAR',name:'South African Rand',flag:'🇿🇦'},
+  {code:'TRY',name:'Turkish Lira',flag:'🇹🇷'},
+  {code:'AED',name:'UAE Dirham',flag:'🇦🇪'},
+  {code:'SAR',name:'Saudi Riyal',flag:'🇸🇦'},
+  {code:'THB',name:'Thai Baht',flag:'🇹🇭'},
+  {code:'IDR',name:'Indonesian Rupiah',flag:'🇮🇩'},
+  {code:'MYR',name:'Malaysian Ringgit',flag:'🇲🇾'},
+  {code:'PHP',name:'Philippine Peso',flag:'🇵🇭'},
+  {code:'PKR',name:'Pakistani Rupee',flag:'🇵🇰'},
+  {code:'EGP',name:'Egyptian Pound',flag:'🇪🇬'},
+  {code:'PLN',name:'Polish Złoty',flag:'🇵🇱'},
+  {code:'CZK',name:'Czech Koruna',flag:'🇨🇿'},
+  {code:'HUF',name:'Hungarian Forint',flag:'🇭🇺'},
+  {code:'ILS',name:'Israeli Shekel',flag:'🇮🇱'},
+  {code:'CLP',name:'Chilean Peso',flag:'🇨🇱'},
+  {code:'COP',name:'Colombian Peso',flag:'🇨🇴'},
+  {code:'ARS',name:'Argentine Peso',flag:'🇦🇷'},
+  {code:'PEN',name:'Peruvian Sol',flag:'🇵🇪'},
+  {code:'RON',name:'Romanian Leu',flag:'🇷🇴'},
+  {code:'UAH',name:'Ukrainian Hryvnia',flag:'🇺🇦'},
+  {code:'RUB',name:'Russian Ruble',flag:'🇷🇺'},
+  {code:'KZT',name:'Kazakhstani Tenge',flag:'🇰🇿'},
+  {code:'TWD',name:'Taiwan Dollar',flag:'🇹🇼'},
+  {code:'BGN',name:'Bulgarian Lev',flag:'🇧🇬'},
+  {code:'HRK',name:'Croatian Kuna',flag:'🇭🇷'},
+  {code:'ISK',name:'Icelandic Króna',flag:'🇮🇸'},
+  {code:'UYU',name:'Uruguayan Peso',flag:'🇺🇾'},
+  {code:'PYG',name:'Paraguayan Guaraní',flag:'🇵🇾'},
+  {code:'DOP',name:'Dominican Peso',flag:'🇩🇴'},
+  {code:'GTQ',name:'Guatemalan Quetzal',flag:'🇬🇹'},
+  {code:'BSD',name:'Bahamian Dollar',flag:'🇧🇸'},
+  {code:'FJD',name:'Fijian Dollar',flag:'🇫🇯'},
+  {code:'PAB',name:'Panamanian Balboa',flag:'🇵🇦'},
+];
+
+const FALLBACK_RATES = {
+  USD:1,EUR:0.92,GBP:0.79,JPY:149.5,CAD:1.36,AUD:1.53,CHF:0.89,
+  CNY:7.24,INR:83.1,MXN:17.2,BRL:4.97,KRW:1325,SGD:1.34,HKD:7.82,
+  NOK:10.6,SEK:10.4,DKK:6.89,NZD:1.63,ZAR:18.6,TRY:32.5,AED:3.67,
+  SAR:3.75,THB:35.1,IDR:15700,MYR:4.72,PHP:56.5,PKR:278,EGP:30.9,
+  PLN:3.97,CZK:23.1,HUF:357,ILS:3.71,CLP:950,COP:3950,ARS:850,
+  PEN:3.72,RON:4.57,UAH:38.5,RUB:91.5,KZT:450,TWD:31.8,BGN:1.80,
+  HRK:6.93,ISK:138,UYU:38.9,PYG:7300,DOP:56.8,GTQ:7.83,BSD:1.0,
+  FJD:2.24,PAB:1.0
+};
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let rates = {...FALLBACK_RATES};
+let fromCur = 'USD', toCur = 'EUR';
+let modalTarget = 'from';
+let history = JSON.parse(localStorage.getItem('fx_history') || '[]');
+let settings = JSON.parse(localStorage.getItem('fx_settings') || '{"auto":true,"haptic":true}');
+let ratesLoaded = false;
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  applySettings();
+  fetchRates();
+  updateUI();
+  buildRatesGrid();
+
+  // auto-convert on input
+  document.getElementById('amount-input').addEventListener('input', () => {
+    if (settings.auto) doConvert(true);
+  });
+});
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function fetchRates() {
+  const API_KEY = '7debb96b99eabf442f8a56b6';
+  const URL = `https://v6.exchangerate-api.com/v6/${API_KEY}/latest/USD`;
+  try {
+    const res = await fetch(URL);
+    const data = await res.json();
+    if (data.result === 'success') {
+      rates = data.conversion_rates;
+      ratesLoaded = true;
+      document.getElementById('header-status').textContent = 'Live rates';
+      const d = new Date();
+      document.getElementById('header-time').textContent =
+        d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      document.getElementById('error-banner').classList.remove('show');
+      buildTicker();
+      buildRatesGrid();
+      doConvert(true);
+      localStorage.setItem('fx_rates', JSON.stringify(rates));
+      localStorage.setItem('fx_rates_time', Date.now());
+    }
+  } catch(e) {
+    // try cache
+    const cached = localStorage.getItem('fx_rates');
+    if (cached) {
+      rates = JSON.parse(cached);
+      document.getElementById('header-status').textContent = 'Cached rates';
+    } else {
+      document.getElementById('error-banner').classList.add('show');
+      document.getElementById('header-status').textContent = 'Offline mode';
+    }
+    buildTicker();
+    buildRatesGrid();
+    doConvert(true);
+  }
+}
+
+// ── CONVERT ───────────────────────────────────────────────────────────────────
+function doConvert(silent = false) {
+  const amtStr = document.getElementById('amount-input').value;
+  const amount = parseFloat(amtStr);
+
+  if (isNaN(amount) || amount < 0) {
+    document.getElementById('result-value').textContent = '—';
+    return;
+  }
+
+  const fromRate = rates[fromCur] || 1;
+  const toRate   = rates[toCur]   || 1;
+  const result   = (amount / fromRate) * toRate;
+
+  const fmt = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: result > 1000 ? 0 : 4
+  });
+
+  document.getElementById('result-value').textContent = fmt.format(result);
+  document.getElementById('result-currency').textContent = toCur;
+
+  const rate1 = (1 / fromRate) * toRate;
+  document.getElementById('rate-line').textContent =
+    `1 ${fromCur} = ${rate1.toFixed(4)} ${toCur}`;
+
+  if (!silent && amount > 0) {
+    saveHistory(amount, fromCur, result, toCur);
+    if (settings.haptic && navigator.vibrate) navigator.vibrate(30);
+    showToast(`${fmt.format(amount)} ${fromCur} → ${fmt.format(result)} ${toCur}`);
+  }
+}
+
+// ── SWAP ──────────────────────────────────────────────────────────────────────
+function swapCurrencies() {
+  [fromCur, toCur] = [toCur, fromCur];
+  const btn = document.getElementById('swap-btn');
+  btn.classList.add('spinning');
+  setTimeout(() => btn.classList.remove('spinning'), 400);
+  updateUI();
+  doConvert(true);
+}
+
+// ── UPDATE UI ─────────────────────────────────────────────────────────────────
+function updateUI() {
+  const f = CURRENCIES.find(c => c.code === fromCur) || {flag:'🌍',code:fromCur};
+  const t = CURRENCIES.find(c => c.code === toCur)   || {flag:'🌍',code:toCur};
+  document.getElementById('flag-from').textContent = f.flag;
+  document.getElementById('code-from').textContent = f.code;
+  document.getElementById('flag-to').textContent   = t.flag;
+  document.getElementById('code-to').textContent   = t.code;
+  document.getElementById('result-currency').textContent = toCur;
+}
+
+// ── QUICK AMOUNTS ─────────────────────────────────────────────────────────────
+function setAmount(val) {
+  document.getElementById('amount-input').value = val;
+  document.querySelectorAll('.quick-chip').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  doConvert(true);
+}
+
+// ── TICKER ────────────────────────────────────────────────────────────────────
+function buildTicker() {
+  const pairs = [
+    ['EUR','🇪🇺'],['GBP','🇬🇧'],['JPY','🇯🇵'],['CAD','🇨🇦'],
+    ['AUD','🇦🇺'],['CHF','🇨🇭'],['CNY','🇨🇳'],['INR','🇮🇳'],
+    ['KRW','🇰🇷'],['MXN','🇲🇽'],['BRL','🇧🇷'],['SGD','🇸🇬']
+  ];
+  let html = '';
+  for (const [code, flag] of [...pairs, ...pairs]) {
+    const r = rates[code] || 0;
+    const change = (Math.random() > 0.5 ? '+' : '-') + (Math.random()*0.5).toFixed(2) + '%';
+    const cls = change.startsWith('+') ? 'up' : 'dn';
+    html += `<span class="ticker-item">
+      <span class="pair">${flag} ${code}/USD</span>
+      <span class="val">${r.toFixed(4)}</span>
+      <span class="${cls}">${change}</span>
+    </span>`;
+  }
+  document.getElementById('ticker-track').innerHTML = html;
+}
+
+// ── RATES GRID ────────────────────────────────────────────────────────────────
+function buildRatesGrid() {
+  const featured = ['EUR','GBP','JPY','CAD','AUD','CHF','CNY','INR','KRW','MXN','BRL','SGD'];
+  let html = '';
+  for (const code of featured) {
+    const cur = CURRENCIES.find(c => c.code === code) || {flag:'🌍',name:code,code};
+    const r = rates[code] || 0;
+    const isUp = Math.random() > 0.4;
+    html += `<div class="rate-tile" onclick="quickSetTo('${code}')">
+      <div class="rate-tile-top">
+        <span class="rate-tile-flag">${cur.flag}</span>
+        <span class="rate-tile-change ${isUp?'up':'dn'}">${isUp?'▲':'▼'} ${(Math.random()*0.8).toFixed(2)}%</span>
+      </div>
+      <div class="rate-tile-code">${code}</div>
+      <div class="rate-tile-name">${cur.name}</div>
+      <div class="rate-tile-value">${r.toFixed(4)}</div>
+    </div>`;
+  }
+  document.getElementById('rates-grid').innerHTML = html;
+}
+
+function quickSetTo(code) {
+  toCur = code;
+  updateUI();
+  doConvert(true);
+  showPage('convert');
+  showToast(`Target set to ${code}`);
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function openModal(target) {
+  modalTarget = target;
+  document.getElementById('modal-title').textContent =
+    target === 'from' ? 'Send from' : 'Convert to';
+  document.getElementById('modal-search').value = '';
+  renderCurrencyList('');
+  document.getElementById('modal-backdrop').classList.add('open');
+  setTimeout(() => document.getElementById('modal-search').focus(), 300);
+}
+
+function closeModal() {
+  document.getElementById('modal-backdrop').classList.remove('open');
+}
+
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('modal-backdrop')) closeModal();
+}
+
+function filterCurrencies(q) { renderCurrencyList(q); }
+
+function renderCurrencyList(q) {
+  const selected = modalTarget === 'from' ? fromCur : toCur;
+  const filtered = q
+    ? CURRENCIES.filter(c =>
+        c.code.toLowerCase().includes(q.toLowerCase()) ||
+        c.name.toLowerCase().includes(q.toLowerCase()))
+    : CURRENCIES;
+
+  const html = filtered.map(c => {
+    const r = rates[c.code] ? rates[c.code].toFixed(4) : '—';
+    return `<div class="currency-item ${c.code === selected ? 'selected' : ''}"
+      onclick="selectCurrency('${c.code}')">
+      <span class="ci-flag">${c.flag}</span>
+      <div class="ci-info">
+        <div class="ci-code">${c.code}</div>
+        <div class="ci-name">${c.name}</div>
+      </div>
+      <div class="ci-rate">${r}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('currency-list').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--muted)">No results</div>';
+}
+
+function selectCurrency(code) {
+  if (modalTarget === 'from') fromCur = code;
+  else toCur = code;
+  closeModal();
+  updateUI();
+  doConvert(true);
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────────
+function saveHistory(fromAmt, fromC, toAmt, toC) {
+  const fmt = n => new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(n);
+  history.unshift({
+    fromAmt: fmt(fromAmt), fromC,
+    toAmt: fmt(toAmt), toC,
+    time: new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
+    date: new Date().toLocaleDateString([],{month:'short',day:'numeric'})
+  });
+  if (history.length > 20) history.pop();
+  localStorage.setItem('fx_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-container');
+  if (!history.length) {
+    el.innerHTML = `<div class="history-empty"><div class="empty-icon">📊</div>No conversions yet.<br>Make your first conversion!</div>`;
+    return;
+  }
+  const fromC_cur = c => CURRENCIES.find(x => x.code === c) || {flag:'🌍'};
+  el.innerHTML = history.map(h => `
+    <div class="history-item">
+      <div class="history-flags">${fromC_cur(h.fromC).flag}→${fromC_cur(h.toC).flag}</div>
+      <div class="history-info">
+        <div class="history-from">${h.fromAmt} ${h.fromC}</div>
+        <div class="history-to">${h.toAmt} ${h.toC}</div>
+      </div>
+      <div class="history-time">${h.time}<br><span style="font-size:10px">${h.date}</span></div>
+    </div>`).join('');
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function toggleSetting(key) {
+  settings[key] = !settings[key];
+  document.getElementById(`toggle-${key}`).classList.toggle('on', settings[key]);
+  localStorage.setItem('fx_settings', JSON.stringify(settings));
+}
+
+function applySettings() {
+  document.getElementById('toggle-auto').classList.toggle('on', settings.auto);
+  document.getElementById('toggle-haptic').classList.toggle('on', settings.haptic);
+  renderHistory();
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  document.getElementById(`nav-${name}`).classList.add('active');
+  document.getElementById('main-scroll').scrollTop = 0;
+  if (name === 'history') renderHistory();
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+
+<!-- PWA Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
